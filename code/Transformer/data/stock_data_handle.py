@@ -41,15 +41,26 @@ class Stock_Data():
         full_stock_dir = os.path.join(self.root_path, self.full_stock)
         
         df = pd.DataFrame([], columns=['date','open','close','high','low','volume','dopen','dclose','dhigh','dlow','dvolume', 'price', 'tic'])
+        df = df.copy()
+
         for ticket in self.ticker_list:
             temp_df = pd.read_csv(os.path.join(full_stock_dir,ticket+'.csv'), usecols=['date', 'open', 'close', 'high', 'low', 'volume', 'dopen', 'dclose', 'dhigh', 'dlow', 'dvolume', 'price'])
+            temp_df = temp_df.copy()
 
-            temp_df['date'] = temp_df['date'].apply(lambda x:str(x))
+            # temp_df['date'] = temp_df['date'].apply(lambda x:str(x))
+            temp_df['date'] = temp_df['date'].astype(str)  
             temp_df['date'] = pd.to_datetime(temp_df['date'])
-            temp_df['label_short_term'] = temp_df['close'].pct_change(periods=self.prediction_len[0]).shift(periods=(-1*self.prediction_len[0]))
-            temp_df['label_long_term'] = temp_df['close'].pct_change(periods=self.prediction_len[1]).shift(periods=(-1*self.prediction_len[1]))
+
+            # temp_df['label_short_term'] = temp_df['close'].pct_change(periods=self.prediction_len[0]).shift(periods=(-1*self.prediction_len[0]))
+            # temp_df['label_long_term'] = temp_df['close'].pct_change(periods=self.prediction_len[1]).shift(periods=(-1*self.prediction_len[1]))
+            
+            temp_df.loc[:, 'label_short_term'] = temp_df['close'].pct_change(periods=self.prediction_len[0]).shift(periods=(-1*self.prediction_len[0]))
+            temp_df.loc[:, 'label_long_term'] = temp_df['close'].pct_change(periods=self.prediction_len[1]).shift(periods=(-1*self.prediction_len[1]))
+
+            
             temp_df['tic'] = ticket
             df = pd.concat((df, temp_df))
+
         df = df.sort_values(by=['date','tic'])
 
         fe = FeatureEngineer(
@@ -59,10 +70,12 @@ class Stock_Data():
                     user_defined_feature = False)
 
         print("generate technical indicator...")
+
         df = fe.preprocess_data(df)
 
         # add covariance matrix as states
         df=df.sort_values(['date','tic'],ignore_index=True)
+
         df.index = df.date.factorize()[0]
 
         cov_list = []
@@ -81,9 +94,12 @@ class Stock_Data():
             cov_list.append(covs)
 
         df_cov = pd.DataFrame({'date':df.date.unique()[lookback:],'cov_list':cov_list,'return_list':return_list})
-        df = df.merge(df_cov, on='date')
+        # df = df.merge(df_cov, on='date')
+        df = df.merge(df_cov, on='date').copy()
+
         df = df.sort_values(['date','tic']).reset_index(drop=True)
 
+        df = df.copy()
         df['date_str'] = df['date'].apply(lambda x: datetime.datetime.strftime(x,'%Y%m%d'))
 
         dates = df['date_str'].unique().tolist()

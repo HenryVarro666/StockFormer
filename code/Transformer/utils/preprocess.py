@@ -23,8 +23,12 @@ def data_split(df, start, end, target_date_col="date"):
     :param data: (df) pandas dataframe, start, end
     :return: (df) pandas dataframe
     """
+    # data = df[(df[target_date_col] >= start) & (df[target_date_col] < end)]
     data = df[(df[target_date_col] >= start) & (df[target_date_col] < end)]
+
     data = data.sort_values([target_date_col, "tic"], ignore_index=True)
+
+    data = data.copy()
     data.index = data[target_date_col].factorize()[0]
     return data
 
@@ -75,8 +79,9 @@ class FeatureEngineer:
         @:param config: source dataframe
         @:return: a DataMatrices object
         """
-        # clean data
+
         df = self.clean_data(df)
+
 
         # add technical indicators using stockstats
         if self.use_technical_indicator:
@@ -120,6 +125,7 @@ class FeatureEngineer:
         merged_closes = merged_closes.dropna(axis=1)
         tics = merged_closes.columns
         df = df[df.tic.isin(tics)]
+
         # df = data.copy()
         # list_ticker = df["tic"].unique().tolist()
         # only apply to daily level data, need to fix for minute level
@@ -148,12 +154,18 @@ class FeatureEngineer:
             indicator_df = pd.DataFrame()
             for i in range(len(unique_ticker)):
                 try:
+
+
                     temp_indicator = stock[stock.tic == unique_ticker[i]][indicator]
                     temp_indicator = pd.DataFrame(temp_indicator)
                     temp_indicator["tic"] = unique_ticker[i]
-                    temp_indicator["date"] = df[df.tic == unique_ticker[i]][
-                        "date"
-                    ].to_list()
+
+                    df_filtered = df[df.tic == unique_ticker[i]].copy()
+                    temp_indicator["date"] = df_filtered["date"].values
+
+                    # temp_indicator["date"] = df[df.tic == unique_ticker[i]][
+                    #     "date"
+                    # ].to_list()
                     for s in range(1,3):
                         temp_indicator[indicator+'_'+str(s)] = temp_indicator[indicator].shift(s)
                     indicator_df = indicator_df.append(
@@ -189,14 +201,22 @@ class FeatureEngineer:
                     temp_indicator = stock[stock.tic == unique_ticker[i]][indicator]
                     temp_indicator = pd.DataFrame(temp_indicator)
                     temp_indicator["tic"] = unique_ticker[i]
-                    temp_indicator["date"] = df[df.tic == unique_ticker[i]][
-                        "date"
-                    ].to_list()
+
+                    df_filtered = df[df.tic == unique_ticker[i]].copy()
+                    temp_indicator["date"] = df_filtered["date"].values
+
+                    # temp_indicator["date"] = df[df.tic == unique_ticker[i]][
+                    #     "date"
+                    # ].to_list()
                     indicator_df = indicator_df.append(
                         temp_indicator, ignore_index=True
                     )
                 except Exception as e:
                     print(e)
+
+            if indicator_df.empty:
+                print(f"Warning: No data for indicator {indicator}, skipping merge.")
+                continue
             df = df.merge(
                 indicator_df[["tic", "date", indicator]], on=["tic", "date"], how="left"
             )
